@@ -1,28 +1,45 @@
 # Hallucination Detection & LLM Evaluation Platform
 
-## Problem Statement
+An AI evaluation platform that measures factual correctness of LLM responses using multiple evaluation strategies:
 
-Large Language Models can generate factually incorrect information
-(hallucinations). This project benchmarks LLMs and evaluates
-their factual correctness using multiple evaluation strategies.
+- Exact Match
+- Keyword Match
+- Semantic Similarity (Sentence Transformers)
 
-## Features
+Features:
+- TruthfulQA Benchmark
+- Gemini Integration
+- Response Caching
+- Evaluation Dashboard
+- Threshold Analysis
+- Failure Analysis
+- Visual Analytics
 
-- Exact Match Evaluation
-- Keyword Match Evaluation
-- Semantic Similarity Evaluation
-- LLM-as-Judge Evaluation
-- DeepEval Integration
-- Hallucination Analytics Dashboard
-
-## Tech Stack
-
+Tech Stack:
 - Python
-- Gemini API
-- Sentence Transformers
 - Streamlit
-- DeepEval
+- Pandas
+- Sentence Transformers
+- Gemini API
+- Matplotlib
 
-## Project Status
+Project Structure:
+hallucination-detection-platform/
 
-Phase 1: Dataset + Gemini Integration
+├── src/
+│   ├── dataset/
+│   ├── models/
+│   ├── evaluators/
+│   ├── scoring/
+│   ├── storage/
+│   ├── cache/
+│   └── visualization/
+│
+├── results/
+│   ├── csv/
+│   └── visualizations/
+│
+├── dashboard.py
+├── main.py
+├── requirements.txt
+└── README.md

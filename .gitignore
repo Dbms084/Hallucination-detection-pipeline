@@ -1,5 +1,11 @@
-venv/
 .env
 __pycache__/
 *.pyc
-results/
+
+venv/
+.venv/
+
+.cache/
+
+results/cache/
+*.log

@@ -1,4 +1,10 @@
-pandas
-datasets
 google-generativeai
+datasets
+pandas
+sentence-transformers
+torch
+streamlit
+matplotlib
+numpy
+scikit-learn
 python-dotenv
