@@ -6,7 +6,7 @@ An AI evaluation platform that measures factual correctness of LLM responses usi
 - Keyword Match
 - Semantic Similarity (Sentence Transformers)
 
-##Features:
+## Features:
 - TruthfulQA Benchmark
 - Gemini Integration
 - Response Caching
@@ -15,7 +15,7 @@ An AI evaluation platform that measures factual correctness of LLM responses usi
 - Failure Analysis
 - Visual Analytics
 
-##Tech Stack:
+## Tech Stack:
 - Python
 - Streamlit
 - Pandas
