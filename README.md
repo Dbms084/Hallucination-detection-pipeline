@@ -6,7 +6,7 @@ An AI evaluation platform that measures factual correctness of LLM responses usi
 - Keyword Match
 - Semantic Similarity (Sentence Transformers)
 
-Features:
+##Features:
 - TruthfulQA Benchmark
 - Gemini Integration
 - Response Caching
@@ -15,7 +15,7 @@ Features:
 - Failure Analysis
 - Visual Analytics
 
-Tech Stack:
+##Tech Stack:
 - Python
 - Streamlit
 - Pandas
@@ -23,24 +23,22 @@ Tech Stack:
 - Gemini API
 - Matplotlib
 
-Project Structure:
-'''text
-hallucination-detection-platform/
+## 📂 Project Structure
 
+```text
+hallucination-detection-platform/
 ├── src/
-│   ├── dataset/
-│   ├── models/
-│   ├── evaluators/
-│   ├── scoring/
-│   ├── storage/
-│   ├── cache/
-│   └── visualization/
-│
+│   ├── dataset/         # Data loading and preprocessing pipelines
+│   ├── models/          # LLM integrations and wrapper interfaces
+│   ├── evaluators/      # Core hallucination detection logic
+│   ├── scoring/         # Metric calculation and scoring algorithms
+│   ├── storage/         # Database and persistent storage layers
+│   ├── cache/           # Response caching mechanisms
+│   └── visualization/   # Dashboard charts and plotting utilities
 ├── results/
-│   ├── csv/
-│   └── visualizations/
-│
-├── dashboard.py
-├── main.py
-├── requirements.txt
-└── README.md
+│   ├── csv/             # Exported evaluation metrics and raw logs
+│   └── visualizations/  # Saved static plots and performance charts
+├── dashboard.py         # Streamlit/Gradio frontend application
+├── main.py              # CLI entry point for running evaluations
+├── requirements.txt     # Project dependencies
+└── README.md            # Project documentation
