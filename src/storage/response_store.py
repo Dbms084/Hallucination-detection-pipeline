@@ -13,7 +13,9 @@ def save_response(
     exact_match,
     keyword_match,
     semantic_score=None,
-    semantic_match=None
+    semantic_match=None,
+    judge_score=None,
+    judge_reason=None
 ):
     """
     Save one evaluation result to evaluation_results.csv
@@ -32,27 +34,30 @@ def save_response(
         "exact_match": [exact_match],
         "keyword_match": [keyword_match],
         "semantic_score": [semantic_score],
-        "semantic_match": [semantic_match]
+        "semantic_match": [semantic_match],
+        "judge_score":[judge_score],
+        "judge_reason":[judge_reason]
     })
 
     if os.path.exists(RESULT_FILE) and os.path.getsize(RESULT_FILE) > 0:
-
         existing_df = pd.read_csv(RESULT_FILE)
-
-        # Prevent duplicate entries
-        duplicate = existing_df[
-            existing_df["question"] == question
-        ]
-
-        if not duplicate.empty:
-            print("Question already exists. Skipping save.")
-            return
-
-        updated_df = pd.concat(
-            [existing_df, new_row],
-            ignore_index=True
-        )
-
+        
+        # Check for matching question using clean question
+        match_mask = existing_df["question"] == question_clean
+        if match_mask.any():
+            print(f"Updating existing entry for: {question_clean}")
+            existing_df.loc[match_mask, "category"] = category
+            existing_df.loc[match_mask, "ground_truth"] = ground_truth_clean
+            existing_df.loc[match_mask, "response"] = response_clean
+            existing_df.loc[match_mask, "exact_match"] = exact_match
+            existing_df.loc[match_mask, "keyword_match"] = keyword_match
+            existing_df.loc[match_mask, "semantic_score"] = semantic_score
+            existing_df.loc[match_mask, "semantic_match"] = semantic_match
+            existing_df.loc[match_mask, "judge_score"] = judge_score
+            existing_df.loc[match_mask, "judge_reason"] = judge_reason
+            updated_df = existing_df
+        else:
+            updated_df = pd.concat([existing_df, new_row], ignore_index=True)
     else:
         updated_df = new_row
 
@@ -62,7 +67,6 @@ def save_response(
         RESULT_FILE,
         index=False
     )
-
     print("Response saved successfully.")
 
 

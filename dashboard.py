@@ -95,6 +95,36 @@ else:
         help="Adjust the cosine similarity threshold to define what counts as a semantic match."
     )
     
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📥 Export Summary Report")
+    
+    if st.sidebar.button("Generate PDF Report", help="Create a comprehensive PDF report using current threshold"):
+        with st.spinner("Generating PDF Report..."):
+            try:
+                from src.reports.report_generator import build_pdf_report
+                from src.scoring.disagreement_analytics import calculate_disagreement_stats, generate_disagreement_chart
+                
+                # Re-generate disagreement chart dynamically for the current threshold
+                stats_for_chart = calculate_disagreement_stats(df, sim_threshold)
+                if stats_for_chart:
+                    generate_disagreement_chart(stats_for_chart, "results/visualizations")
+                
+                pdf_path = "results/reports/evaluation_summary.pdf"
+                build_pdf_report(CSV_FILE, pdf_path, threshold=sim_threshold, vis_dir="results/visualizations")
+                
+                with open(pdf_path, "rb") as f:
+                    pdf_bytes = f.read()
+                    
+                st.sidebar.download_button(
+                    label="Download PDF Report",
+                    data=pdf_bytes,
+                    file_name=f"evaluation_report_threshold_{sim_threshold:.2f}.pdf",
+                    mime="application/pdf"
+                )
+                st.sidebar.success("PDF Report is ready!")
+            except Exception as e:
+                st.sidebar.error(f"Error generating PDF: {e}")
+    
     # Filter dataframe by category
     filtered_df = df if selected_category == "All" else df[df["category"] == selected_category]
     
@@ -109,12 +139,18 @@ else:
         dynamic_semantic_matches = filtered_df["semantic_score"] >= sim_threshold
         semantic_acc = (dynamic_semantic_matches.sum() / total_q) * 100
         avg_semantic_score = filtered_df["semantic_score"].mean()
+        
+        # Calculate judge accuracy
+        if "judge_score" in filtered_df.columns:
+            judge_acc = (filtered_df["judge_score"].fillna(0).sum() / total_q) * 100
+        else:
+            judge_acc = 0
     else:
-        exact_acc = keyword_acc = semantic_acc = avg_semantic_score = 0
+        exact_acc = keyword_acc = semantic_acc = avg_semantic_score = judge_acc = 0
     
     # KPI Metrics Section
     st.subheader("📈 Key Performance Indicators")
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.markdown(f"""
@@ -155,6 +191,15 @@ else:
     with col5:
         st.markdown(f"""
         <div class="metric-card">
+            <div class="metric-title">Gemini Judge</div>
+            <div class="metric-value">{judge_acc:.1f}%</div>
+            <div class="metric-sub" style="color: #C084FC;">Factual correctness</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col6:
+        st.markdown(f"""
+        <div class="metric-card">
             <div class="metric-title">Avg Cos Sim</div>
             <div class="metric-value">{avg_semantic_score:.3f}</div>
             <div class="metric-sub" style="color: #F472B6;">Overall Similarity</div>
@@ -165,9 +210,10 @@ else:
     st.markdown(" ")
     
     # Main Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Visual Analytics", 
         "🔍 Response Inspector", 
+        "⚖️ Judge Disagreement Analytics",
         "⚠️ Failure Analysis",
         "🧩 Evaluator Summary & Insights",
         "📂 Dataset Viewer"
@@ -290,12 +336,29 @@ else:
                 st.markdown("### Score Breakdown")
                 is_sem_match = selected_row['semantic_score'] >= sim_threshold
                 
+                # Check if judge fields are in data
+                has_judge = "judge_score" in selected_row
+                judge_score_val = selected_row["judge_score"] if has_judge else "N/A"
+                judge_reason_val = selected_row["judge_reason"] if has_judge else "N/A"
+                
                 st.markdown(f"""
                 *   **Exact Match:** {'✅ Match' if selected_row['exact_match'] else '❌ Mismatch'}
                 *   **Keyword Match:** {'✅ Match' if selected_row['keyword_match'] else '❌ Mismatch'}
                 *   **Semantic Match (at {sim_threshold:.2f}):** {'✅ Match' if is_sem_match else '❌ Mismatch'}
                 *   **Cosine Similarity Score:** `{selected_row['semantic_score']:.4f}`
                 """)
+                
+                if has_judge:
+                    if pd.notna(judge_score_val):
+                        st.markdown(f"""
+                        *   **Gemini Judge Score:** {'✅ Factually Correct (1)' if judge_score_val == 1 else '❌ Factually Incorrect (0)'}
+                        *   **Judge Explanation:** *"{judge_reason_val}"*
+                        """)
+                    elif pd.notna(judge_reason_val) and judge_reason_val != "N/A":
+                        st.markdown(f"""
+                        *   **Gemini Judge Score:** `Pending/Skipped`
+                        *   **Judge Explanation:** *"{judge_reason_val}"*
+                        """)
                 
             with exp_col2:
                 st.markdown("### LLM Response Output")
@@ -306,22 +369,149 @@ else:
             st.write("No questions available for selection.")
 
     with tab3:
-        st.subheader("⚠️ Hallucination & Failure Analysis")
-        st.markdown("This tab displays evaluation entries where the LLM response failed to match the ground truth semantically (Cosine Similarity < threshold).")
+        st.subheader("⚖️ Judge Disagreement Analytics")
+        st.markdown(
+            "This section compares the vector-based **Semantic Similarity** and key-term **Keyword Match** "
+            "metrics against the factual correctness verdicts from the **Gemini LLM Judge**."
+        )
         
-        # Find failures based on the simulated threshold
-        failures = filtered_df[filtered_df["semantic_score"] < sim_threshold].reset_index(drop=True)
+        from src.scoring.disagreement_analytics import calculate_disagreement_stats, generate_disagreement_chart
+        
+        stats = calculate_disagreement_stats(filtered_df, sim_threshold)
+        
+        if stats is None:
+            st.warning("⚠️ No Gemini Judge score column (`judge_score`) found in the dataset, or the data is empty.")
+        else:
+            # Re-generate disagreement donut chart for current filtered dataframe & threshold
+            generate_disagreement_chart(stats, "results/visualizations")
+            
+            # Show high-level metrics in a nice 3-column row
+            col_stat1, col_stat2, col_stat3 = st.columns(3)
+            with col_stat1:
+                st.metric(
+                    label="Agreement Rate",
+                    value=f"{stats['agreement_rate']:.1f}%",
+                    help=f"{stats['agreed_correct_count']} agreed correct, {stats['agreed_incorrect_count']} agreed incorrect"
+                )
+            with col_stat2:
+                st.metric(
+                    label="Semantic Disagreement Rate",
+                    value=f"{stats['disagreement_rate']:.1f}%",
+                    help=f"{stats['false_positive_count']} false positives, {stats['false_negative_count']} false negatives"
+                )
+            with col_stat3:
+                st.metric(
+                    label="Keyword Disagreement Rate",
+                    value=f"{stats['keyword_disagreement_rate']:.1f}%",
+                    help=f"{stats['keyword_fallacy_count']} keyword fallacies, {stats['keyword_omission_count']} keyword omissions"
+                )
+            
+            # Detailed breakdown row
+            col_b1, col_b2 = st.columns([3, 2])
+            
+            with col_b1:
+                st.markdown("### Disagreement Type Breakdown")
+                
+                breakdown_df = pd.DataFrame({
+                    "Disagreement Category": [
+                        "False Positive (Semantic Pass, Judge Fail)",
+                        "False Negative (Semantic Fail, Judge Pass)",
+                        "Keyword Fallacy (Keyword Pass, Judge Fail)",
+                        "Keyword Omission (Keyword Fail, Judge Pass)"
+                    ],
+                    "Count": [
+                        stats["false_positive_count"],
+                        stats["false_negative_count"],
+                        stats["keyword_fallacy_count"],
+                        stats["keyword_omission_count"]
+                    ],
+                    "Percentage of Total Valid": [
+                        f"{stats['false_positive_rate']:.1f}%",
+                        f"{stats['false_negative_rate']:.1f}%",
+                        f"{(stats['keyword_fallacy_count'] / stats['total_evaluated']) * 100:.1f}%",
+                        f"{(stats['keyword_omission_count'] / stats['total_evaluated']) * 100:.1f}%"
+                    ]
+                })
+                st.dataframe(breakdown_df, use_container_width=True)
+            
+            with col_b2:
+                st.markdown("### Agreement Distribution")
+                donut_chart_path = "results/visualizations/disagreement_distribution.png"
+                if os.path.exists(donut_chart_path):
+                    st.image(donut_chart_path, use_container_width=True)
+            
+            # Interactive explorer for disagreement cases
+            st.markdown("---")
+            st.markdown("### 🔍 Interactive Disagreement Explorer")
+            
+            # Create a dataframe of cases where semantic similarity and judge disagreed
+            disagree_cases = filtered_df.copy()
+            disagree_cases["semantic_match_dynamic"] = disagree_cases["semantic_score"] >= sim_threshold
+            
+            # Filter for disagreements
+            disagree_df = disagree_cases[disagree_cases["semantic_match_dynamic"] != (disagree_cases["judge_score"] == 1)].dropna(subset=["judge_score"]).reset_index(drop=True)
+            
+            st.write(f"Found **{len(disagree_df)}** disagreement cases in this category filter.")
+            
+            if len(disagree_df) > 0:
+                disagree_question_list = disagree_df["question"].astype(str).str.replace("\\n", " ", regex=False).tolist()
+                selected_disagree_q = st.selectbox("Select Disagreement Case to Inspect", disagree_question_list, key="disagree_explorer_select")
+                
+                d_idx = disagree_question_list.index(selected_disagree_q)
+                d_row = disagree_df.iloc[d_idx]
+                
+                dc1, dc2 = st.columns([1, 1])
+                with dc1:
+                    st.markdown("**Question:**")
+                    st.info(str(d_row["question"]).replace("\\n", "\n"))
+                    st.markdown("**Ground Truth Answer:**")
+                    st.success(str(d_row["ground_truth"]).replace("\\n", "\n"))
+                with dc2:
+                    st.markdown("**Model Response:**")
+                    st.warning(str(d_row["response"]).replace("\\n", "\n"))
+                    
+                    st.markdown("##### Scores & Verdicts")
+                    st.markdown(f"""
+                    *   **Semantic Score:** `{d_row['semantic_score']:.4f}` (Match: {'✅ Yes' if d_row['semantic_match_dynamic'] else '❌ No'})
+                    *   **Keyword Match:** {'✅ Yes' if d_row['keyword_match'] else '❌ No'}
+                    *   **LLM Judge Score:** `{'✅ 1.0 (Correct)' if d_row['judge_score'] == 1 else '❌ 0.0 (Incorrect)'}`
+                    *   **LLM Judge Reason:** *"{d_row['judge_reason']}"*
+                    """)
+
+    with tab4:
+        st.subheader("⚠️ Hallucination & Failure Analysis")
+        
+        # Select analysis mode inside Failure Analysis tab
+        analysis_mode = st.selectbox(
+            "Select Failure View",
+            ["All Semantic Failures", "Disagreements (Semantic Failed but Gemini Judge Passed)"]
+        )
+        
+        if analysis_mode == "All Semantic Failures":
+            failures = filtered_df[filtered_df["semantic_score"] < sim_threshold].reset_index(drop=True)
+            st.markdown("This section displays evaluation entries where the response fell below the semantic similarity threshold.")
+        else:
+            if "judge_score" in filtered_df.columns:
+                failures = filtered_df[
+                    (filtered_df["semantic_score"] < sim_threshold) & 
+                    (filtered_df["judge_score"] == 1)
+                ].reset_index(drop=True)
+                st.markdown("This section displays **false negative disagreements**—cases where semantic similarity threshold was too strict (failed), but the Gemini LLM Judge verified the response as factually correct (passed).")
+            else:
+                failures = pd.DataFrame()
+                st.warning("No Gemini Judge score column found in data.")
+                
         total_failures = len(failures)
         
-        st.markdown(f"**Identified Failures:** `{total_failures}` out of `{total_q}` responses ({((total_failures/total_q)*100 if total_q > 0 else 0):.1f}%)")
+        st.markdown(f"**Identified Cases:** `{total_failures}`")
         
         if total_failures > 0:
-            fail_idx = st.number_input("Browse Failures (Index)", min_value=0, max_value=total_failures-1, value=0, step=1)
+            fail_idx = st.number_input("Browse Cases (Index)", min_value=0, max_value=total_failures-1, value=0, step=1, key=f"fail_browse_{analysis_mode.replace(' ', '_')}")
             fail_row = failures.iloc[fail_idx]
             
             f_col1, f_col2 = st.columns([2, 3])
             with f_col1:
-                st.markdown("### Failure Details")
+                st.markdown("### Case Details")
                 st.markdown(f"**Question {fail_idx+1}:**")
                 st.warning(str(fail_row['question']).replace("\\n", "\n"))
                 
@@ -336,15 +526,27 @@ else:
                 - **Keyword Match:** `{'Yes' if fail_row['keyword_match'] else 'No'}`
                 - **Semantic Score:** `{fail_row['semantic_score']:.4f}` (Failed to meet `{sim_threshold:.2f}`)
                 """)
+                
+                if "judge_score" in fail_row:
+                    if pd.notna(fail_row['judge_score']):
+                        st.markdown(f"""
+                        - **Gemini Judge Score:** `{fail_row['judge_score']}`
+                        - **Judge Reason:** *"{fail_row['judge_reason']}"*
+                        """)
+                    elif pd.notna(fail_row['judge_reason']) and fail_row['judge_reason'] != "N/A":
+                        st.markdown(f"""
+                        - **Gemini Judge Score:** `Pending/Skipped`
+                        - **Judge Reason:** *"{fail_row['judge_reason']}"*
+                        """)
             with f_col2:
-                st.markdown("### Actual Model Response (Hallucination)")
+                st.markdown("### Actual Model Response")
                 formatted_fail_response = str(fail_row['response']).replace("\\n", "\n")
-                st.text_area("Gemini Response Output", value=formatted_fail_response, height=350, disabled=True, key="failure_text")
+                st.text_area("Response Output", value=formatted_fail_response, height=350, disabled=True, key=f"failure_text_{analysis_mode.replace(' ', '_')}_{fail_idx}")
         else:
-            st.success("🎉 Outstanding! There are no failures under the current semantic similarity threshold!")
-
-    with tab4:
-        st.subheader("🧩 Evaluator Comparison & Insights")
+            st.success("🎉 No cases found matching the criteria under the current settings!")
+ 
+    with tab5:
+        st.subheader("🧩 Evaluator Summary & Insights")
         
         # Layout columns
         insights_col, confusion_col = st.columns([3, 2])
@@ -410,8 +612,8 @@ else:
                 """)
             else:
                 st.write("No data loaded.")
-
-    with tab5:
+ 
+    with tab6:
         st.subheader("Raw Results Dataset")
         st.markdown("This table displays the complete evaluations from `evaluation_results.csv`.")
         
@@ -420,5 +622,4 @@ else:
         # Clean formatting newlines for UI spreadsheet rendering
         for col in ["question", "ground_truth", "response"]:
             display_df[col] = display_df[col].astype(str).str.replace("\\n", " ", regex=False)
-            
         st.dataframe(display_df, use_container_width=True)

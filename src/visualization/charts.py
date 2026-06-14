@@ -16,13 +16,15 @@ def evaluator_comparison_chart(metrics):
     evaluators = [
         "Exact Match",
         "Keyword Match",
-        "Semantic Match"
+        "Semantic Match",
+        "Gemini Judge"
     ]
 
     accuracies = [
         metrics["exact_accuracy"],
         metrics["keyword_accuracy"],
-        metrics["semantic_accuracy"]
+        metrics["semantic_accuracy"],
+        metrics["judge_accuracy"]
     ]
 
     plt.figure(figsize=(8, 5))
